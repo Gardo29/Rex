@@ -1,15 +1,6 @@
-from random import randint
-import numpy as np
 import pandas as pd
-import surprise
-from sklearn import preprocessing
-from sklearn.metrics import make_scorer
 
-import rex.model
-from rex.tools import describe
 from rex.model import Rex
-
-from rex.preprocessing2 import *
 
 RES_PATH = '../../resources'
 MOVIE_LENS_RATINGS = '/ml-small/ratings.csv'
@@ -22,8 +13,10 @@ movielens_tags = pd.read_csv(RES_PATH + MOVIE_LENS_TAGS)
 
 valid_algo = {'KNNBaseline', 'SlopeOne', 'SVD', 'LightFM', 'auto'}
 
-rex = Rex('LightFM', auto_preprocess=False)
-rex2 = Rex(['SVD', 'LightFM'], SVD={'n_factors': 300, 'n_epochs': 50}, LightFM={'no_components': 50})
+rex = Rex('LightFM')
+
+# rex.fit(movielens)  # user_features=
+# print(rex.predict(movielens.sample(300), item_features=movielens_movie_features, k=40, mode='item'))
 
 rex.fit(movielens, item_features=movielens_movie_features)  # user_features=
 print(rex.predict(movielens.sample(300), item_features=movielens_movie_features, k=40, mode='item'))

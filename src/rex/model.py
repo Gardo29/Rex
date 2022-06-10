@@ -77,7 +77,7 @@ class RexBaseModel(ABC, BaseEstimator):
         # save start time
         start_time = time()
         if verbose:
-            print(f"Fitting algorithm: {self.__class__.__name__}")
+            print(f"Fitting '{self.__class__.__name__}'")
         # extract dataframe if there are PreprocessedDataFrame
         if isinstance(dataset, PreprocessedDataFrame):
             dataset = dataset.dataframe
@@ -88,7 +88,7 @@ class RexBaseModel(ABC, BaseEstimator):
         # fit the model
         self._checked_fit(dataset, verbose, **kwargs)
         if verbose:
-            print(f"Fit time: {time() - start_time}s")
+            print(f"Fit time '{self.__class__.__name__}': {time() - start_time}s")
         return self
 
     @abstractmethod
@@ -96,7 +96,7 @@ class RexBaseModel(ABC, BaseEstimator):
         pass
 
     def predict(self,
-                x: Iterable | DataFrame | PreprocessedDataFrame | list[(Any, Any)],
+                x: Iterable | DataFrame | PreprocessedDataFrame,
                 item_ids: Optional[Iterable] = None,
                 k: int = 10,
                 previous_interactions: Optional[DataFrame] = None,
@@ -105,11 +105,17 @@ class RexBaseModel(ABC, BaseEstimator):
         # check if model is fitted
         check_is_fitted(self)
 
-        # check features if present
+        # check features if present and extract
         if 'user_features' in kwargs:
-            check_features(kwargs['user_features'])
+            user_features = kwargs['user_features']
+            check_features(user_features)
+            if isinstance(user_features, PreprocessedDataFrame):
+                kwargs['user_features'] = user_features.dataframe
         if 'item_features' in kwargs:
+            item_features = kwargs['item_features']
             check_features(kwargs['item_features'])
+            if isinstance(item_features, PreprocessedDataFrame):
+                kwargs['item_features'] = item_features.dataframe
         # check exclude features
         if 'exclude_features' in kwargs:
             if (mode == 'user' and 'item_features' not in kwargs) or (mode != 'user' and 'user_features' not in kwargs):
@@ -125,16 +131,20 @@ class RexBaseModel(ABC, BaseEstimator):
             user_ids = np.sort(unique(x.iloc[:, USER_ID].values))
             item_ids = np.sort(unique(x.iloc[:, ITEM_ID].values))
         # if there are ids pairs all work is done, return
-        elif isinstance(x, list) and all(isinstance(pair, tuple) and len(pair) == 2 for pair in x):
-            return self._checked_predict(x, k, previous_interactions, mode, **kwargs)
+        elif isinstance(x, Iterable) and all(isinstance(pair, tuple) and len(pair) == 2 for pair in x):
+            return self._checked_predict(list(x), k, previous_interactions, mode, **kwargs)
         # if there are two ids iterable just pass them
         elif isinstance(x, Iterable) and isinstance(item_ids, Iterable):
             user_ids = np.sort(unique(x))
             item_ids = np.sort(unique(item_ids))
         else:
-            raise ValueError("'x' must be either a Pandas Dataframe or provide both 'x' and 'item_id' as Iterables")
+            raise ValueError(
+                "'x' must be either a Pandas Dataframe or "
+                "provide both 'x' and 'item_id' as Iterables or "
+                "provide a unique Iterable with ids couples")
         # run the predictions
-        return self._checked_predict(list(product(user_ids, item_ids)), k, previous_interactions, mode, **kwargs)
+        pairs = list(product(user_ids, item_ids))
+        return self._checked_predict(pairs, k, previous_interactions, mode, **kwargs)
 
     @abstractmethod
     def _checked_predict(self,
@@ -296,7 +306,7 @@ class LightFM(RexWrapperModel):
                         verbose=verbose,
                         **kwargs)
         # save internal mapping for ids
-        self._user_id_map, self._user_features_map, self._item_id_map, self._item_feature_map = self._lfm_builder.mapping()
+        self._user_id_map, _, self._item_id_map, _ = self._lfm_builder.mapping()
         # class attributes after training
         self.item_embeddings_ = self._model.item_embeddings
         self.user_embeddings_ = self._model.user_embeddings
@@ -390,8 +400,8 @@ class LightFM(RexWrapperModel):
         # wrong dict without weights
         wrong_features = optional_features.set_index(optional_features.columns[USER_ID]).to_dict('index')
         # adjusted data [(id, {feature: weight,...})...],
-        data_features = [(feature_id, adjust_dict(features_dict))
-                         for feature_id, features_dict in wrong_features.items()]
+        data_features = np.sort([(feature_id, adjust_dict(features_dict))
+                                 for feature_id, features_dict in wrong_features.items()])
         # extract all single features
         all_features = np.sort(unique([val for _, dicts in data_features for val in dicts.keys()]))
 
@@ -429,18 +439,19 @@ class Rex(BaseCoreModel):
         if isinstance(algo, str) and algo != 'auto':
             return {algo: self._algorithms[algo](**kwargs)}
         else:
-            used_algorithms = self._algorithms.keys() if 'auto' else algo
+            used_algorithms = self._algorithms.keys() if algo == 'auto' else algo
             return {algorithm: self._algorithms[algorithm](**kwargs.get(algorithm, {}))
                     for algorithm in used_algorithms}
 
     def fit(self, dataset: DataFrame | PreprocessedDataFrame, y=None, verbose: bool = True, **kwargs) -> Any:
         # fit attribute, pipelines
+
         if self.auto_preprocess:
             self.preprocess_pipelines_ = {}
             # if it's a DataFrame -> preprocess
             if isinstance(dataset, DataFrame):
                 if verbose:
-                    print('Auto preprocessing weight DataFrame')
+                    print('Auto preprocessing weights DataFrame')
                 dataset = auto_preprocess_weights_dataframe(dataset, verbose=verbose)
             # if it's a PreprocessDataFrame -> give some advice
             elif isinstance(dataset, PreprocessedDataFrame):
@@ -497,25 +508,45 @@ class Rex(BaseCoreModel):
         return super(Rex, self).fit(dataset, verbose=verbose, **kwargs)
 
     def _checked_fit(self, dataset: DataFrame, verbose: bool = True, **kwargs) -> Rex:
-        if len(self.models) == 1:
-            for name, model in self.models.items():
-                self.best_model_ = model.fit(dataset, verbose=verbose, **kwargs)
-                # self.score_ = TODO evaluate model
-        else:
-            for name, model in self.models.items():
+        self.scores_ = {}
+        for name, model in self.models.items():
+            # give advice for SurpriseModel
+            if issubclass(model.__class__, SurpriseModel):
+                if 'user_features' in kwargs:
+                    print(f"WARNING: model '{type(model).__name__}' can't use 'user_features' in fit")
+                    del kwargs['user_features']
+                if 'item_features' in kwargs:
+                    print(f"WARNING: model '{type(model).__name__}' can't use 'item_features' in fit")
+                    del kwargs['item_features']
+            # train the model
+            if len(self.models) > 1:
                 model.fit(dataset, verbose=verbose, **kwargs.get(name, {}))
-            # TODO: cambia
-            self.best_model_ = list(self.models.values())[0]
-            # self.score_ = max(scores.values())
+            else:
+                model.fit(dataset, verbose=verbose, **kwargs)
+            self.scores_[name] = np.random.randint(0, 10)  # TODO evaluate model
+
+        self.best_model_ = self.models[max(self.scores_)]
         return self
 
     def predict(self,
                 x: Iterable | DataFrame | PreprocessedDataFrame | list[(Any, Any)],
                 item_ids: Optional[Iterable] = None,
                 k: int = 10,
-                previous_interactions: Optional[DataFrame] = None,
+                previous_interactions: Optional[DataFrame | PreprocessedDataFrame] = None,
                 mode: str = "user",
                 **kwargs) -> DataFrame:
+        # remove features and give advice
+        if not isinstance(self.best_model_, LightFM):
+            if 'user_features' in kwargs:
+                print(f"WARNING: model '{type(self.best_model_).__name__}' can't use 'user_features' in predict")
+                del kwargs['user_features']
+            if 'item_features' in kwargs:
+                print(f"WARNING: model '{type(self.best_model_).__name__}' can't use 'item_features' in predict")
+                del kwargs['item_features']
+            if 'exclude_features' in kwargs:
+                print(f"WARNING: model '{type(self.best_model_).__name__}' can't exclude features in predict")
+                del kwargs['exclude_features']
+
         if self.auto_preprocess:
             # if x is a DataFrame -> preprocess
             if isinstance(x, DataFrame):

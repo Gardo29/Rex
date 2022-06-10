@@ -694,7 +694,7 @@ def auto_preprocess_weights_dataframe(dataframe: DataFrame,
         if verbose:
             print(
                 f"Applied L2 Normalizer to {tools.get_df(dataframe).columns[weights_col]} column"
-                f"using '{tools.get_df(dataframe).columns[user_id_col]}' as group")
+                f" using '{tools.get_df(dataframe).columns[user_id_col]}' as group")
         dataframe = Normalizer(group_by_features=tools.get_df(dataframe).columns[user_id_col],
                                features=tools.get_df(dataframe).columns[weights_col]).fit_transform(dataframe)
 
@@ -757,7 +757,8 @@ def auto_preprocess_features_dataframe(dataframe: DataFrame,
                 dataframe = OneHotEncode(feature, divider=divider).fit_transform(dataframe)
             else:
                 if verbose:
-                    print(f'Applied BinCumulative at {cumulative_percent}% to feature \'{feature}\'')
+                    print(f"Applied BinCumulative at 70% to feature '{feature}' "
+                          f"with new value '{cumulative_binning_value}'")
                 dataframe = BinCumulative(feature,
                                           cumulative_binning_value,
                                           cumulative_threshold=cumulative_percent).fit_transform(dataframe)
