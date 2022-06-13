@@ -7,11 +7,12 @@ from test.model_tests.surprise_test import SurpriseTest
 
 # TODO grid search
 class SVDTest(SurpriseTest):
-    def _grid_search_parameters(self) -> dict:
-        return {}
 
     def setUp(self) -> None:
         super(SVDTest, self).setUp()
+
+    def _grid_search_parameters(self) -> dict:
+        return {}
 
     def _rex_algo(self) -> type:
         return SVD
@@ -39,4 +40,4 @@ class SVDTest(SurpriseTest):
                 'verbose': False}
 
     def test_predict(self):
-        self.assertTrue(self.check_equals_predict(random_state=True))
+        self.check_equals_predict(random_state=True)

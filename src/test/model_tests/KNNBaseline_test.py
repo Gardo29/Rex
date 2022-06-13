@@ -9,12 +9,11 @@ from test.model_tests.surprise_test import SurpriseTest
 
 # TODO grid search
 class KNNBaselineTest(SurpriseTest):
+    def setUp(self) -> None:
+        super(KNNBaselineTest, self).setUp()
 
     def _grid_search_parameters(self) -> dict:
         return {}
-
-    def setUp(self) -> None:
-        super(KNNBaselineTest, self).setUp()
 
     def _rex_algo(self) -> type:
         return KNNBaseline
@@ -28,3 +27,6 @@ class KNNBaselineTest(SurpriseTest):
                 'sim_options': {},
                 'bsl_options': {},
                 'verbose': True}
+
+    def test_predict(self):
+        self.check_equals_predict(random_state=False)

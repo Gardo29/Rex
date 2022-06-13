@@ -16,7 +16,7 @@ from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 from rex.model_evaluation import precision_k
 from rex.preprocessing2 import PreprocessedDataFrame, auto_preprocess_weights_dataframe, PreprocessPipeline, \
     auto_preprocess_features_dataframe
-from rex.tools import check_weights, check_features, unique, dataframe_advisor
+from rex.tools import check_weights_dataframe, check_features, unique, dataframe_advisor, is_no_weights_dataframe
 # LightFM
 from lightfm import data
 import lightfm
@@ -68,7 +68,7 @@ def compute_predictions(predictions,
 
 class RexBaseModel(ABC, BaseEstimator):
     def fit(self, dataset: DataFrame | PreprocessedDataFrame, y=None, verbose: bool = True, **kwargs) -> Any:
-        check_weights(dataset)
+        check_weights_dataframe(dataset)
         # checks datasets
         if 'user_features' in kwargs:
             check_features(kwargs['user_features'])
@@ -127,7 +127,7 @@ class RexBaseModel(ABC, BaseEstimator):
             x = x.dataframe
         # if it's a normal DataFrame check DataFrame and extract ids
         if isinstance(x, DataFrame):
-            check_weights(x)
+            check_weights_dataframe(x)
             user_ids = np.sort(unique(x.iloc[:, USER_ID].values))
             item_ids = np.sort(unique(x.iloc[:, ITEM_ID].values))
         # if there are ids pairs all work is done, return
@@ -174,7 +174,7 @@ class RexWrapperModel(RexBaseModel, ABC):
         self._model = model_class(**kwargs)
 
     def set_params(self, **params) -> Any:
-        super(RexWrapperModel, self).set_params()
+        super(RexWrapperModel, self).set_params(**params)
         self._model = self._model_class(**params)
         return self
 
@@ -191,10 +191,15 @@ class SurpriseModel(RexWrapperModel):
         super(SurpriseModel, self).__init__(model, **kwargs)
 
     def _checked_fit(self, dataset: DataFrame, verbose: bool = True, **kwargs) -> Any:
-        # select ratings
-        ratings = dataset.iloc[:, WEIGHT]
-        # create Reader for read data from DataFrame
-        reader = Reader(rating_scale=(ratings.min(), ratings.max()))
+        if is_no_weights_dataframe(dataset):
+            # create Reader for read data from DataFrame no weights
+            dataset['weight'] = 1
+            reader = Reader(rating_scale=(1, 1))
+        else:
+            # select ratings
+            ratings = dataset.iloc[:, WEIGHT]
+            # create Reader for read data from DataFrame
+            reader = Reader(rating_scale=(ratings.min(), ratings.max()))
         # create Surprise dataset from input DataFrame
         surprise_dataset = surprise.Dataset.load_from_df(dataset, reader).build_full_trainset()
         # fit model
@@ -211,7 +216,8 @@ class SurpriseModel(RexWrapperModel):
                          mode: str = "user",
                          **kwargs) -> DataFrame:
         # calculates all predictions
-        all_predictions = [self._model.predict(user_id, item_id, clip=False) for user_id, item_id in ids_pairs]
+        all_predictions = [self._model.predict(user_id, item_id, clip=False, **kwargs) for user_id, item_id in
+                           ids_pairs]
         # extract top k predictions
         k_top_predictions = compute_predictions(
             predictions=all_predictions,
@@ -229,8 +235,6 @@ class SurpriseModel(RexWrapperModel):
 
 class SVD(SurpriseModel):
     def __init__(self, **kwargs):
-        # TODO: rimuovi
-        kwargs['n_epochs'] = 1
         super(SVD, self).__init__(surprise.SVD, **kwargs)
 
     def _fit_surprise_model(self, dataset: DataFrame, verbose: bool = True, **kwargs) -> SVD:
@@ -320,6 +324,11 @@ class LightFM(RexWrapperModel):
                          previous_interactions: Optional[DataFrame] = None,
                          mode: str = "user",
                          **kwargs) -> DataFrame:
+        def compute_exclude_features(features, to_excluded):
+            return [feature_id
+                    for feature_id, features in features
+                    for feature in features.keys()
+                    if any(exclude in feature for exclude in to_excluded)]
 
         # if there are features to be excluded
         if 'exclude_features' in kwargs:
@@ -337,9 +346,7 @@ class LightFM(RexWrapperModel):
             # if there are features to be excluded and mode isn't 'user'
             if exclude_features and mode != 'user':
                 # compute users to be excluded
-                user_to_be_excluded = [user_id
-                                       for user_id, features in user_features
-                                       if not any(feature in exclude_features for feature in features.keys())]
+                user_to_be_excluded = compute_exclude_features(user_features, exclude_features)
                 # remove those users from ids_pairs
                 ids_pairs = [(user_id, item_id) for user_id, item_id in ids_pairs if user_id not in user_to_be_excluded]
 
@@ -350,9 +357,7 @@ class LightFM(RexWrapperModel):
             # if there are features to be excluded and mode is 'user'
             if exclude_features and mode == 'user':
                 # compute users to be excluded
-                item_to_be_excluded = [item_id
-                                       for item_id, features in item_features
-                                       if any(feature in exclude_features for feature in features.keys())]
+                item_to_be_excluded = compute_exclude_features(item_features, exclude_features)
                 # remove those users from ids_pairs
                 ids_pairs = [(user_id, item_id) for user_id, item_id in ids_pairs if item_id not in item_to_be_excluded]
 
@@ -364,7 +369,7 @@ class LightFM(RexWrapperModel):
         unchanged_item_id = [item_id for _, item_id in ids_pairs]
 
         # compute scores
-        scores = self._model.predict(lightfm_user_id, lightfm_item_id, num_threads=threading.active_count(), **kwargs)
+        scores = self._model.predict(lightfm_user_id, lightfm_item_id, **kwargs)
         # compute top k predictions
         k_predictions = compute_predictions(
             predictions=list(zip(unchanged_user_id, unchanged_item_id, scores)),
@@ -392,7 +397,8 @@ class LightFM(RexWrapperModel):
         # transform column value to a weighted feature if categorical, otherwise (int,float) keeps the weight
         def adjust_dict(user_feature_dict):
             return dict(
-                (key, val) if isinstance(val, int) or isinstance(val, float) else (val, self._categorical_weight)
+                (key, val) if isinstance(val, int) or isinstance(val, float) else (
+                    f'{key}:{val}', self._categorical_weight)
                 for key, val in user_feature_dict.items())
 
         # extract all ids
@@ -400,8 +406,8 @@ class LightFM(RexWrapperModel):
         # wrong dict without weights
         wrong_features = optional_features.set_index(optional_features.columns[USER_ID]).to_dict('index')
         # adjusted data [(id, {feature: weight,...})...],
-        data_features = np.sort([(feature_id, adjust_dict(features_dict))
-                                 for feature_id, features_dict in wrong_features.items()])
+        data_features = [(feature_id, adjust_dict(features_dict))
+                         for feature_id, features_dict in wrong_features.items()]
         # extract all single features
         all_features = np.sort(unique([val for _, dicts in data_features for val in dicts.keys()]))
 

@@ -661,7 +661,7 @@ def auto_preprocess_weights_dataframe(dataframe: DataFrame,
 
     tools.is_dataframe(dataframe)
 
-    if tools.get_df(dataframe).columns.size == min_columns:
+    if tools.is_no_weights_dataframe(dataframe):
         if train_size:
             train, test = train_test_split(dataframe, train_size, random_state)
             return (train, test, PreprocessPipeline([], verbose=verbose)) if return_pipeline else (train, test)

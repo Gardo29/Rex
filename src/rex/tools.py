@@ -47,7 +47,15 @@ def is_dataframe(dataframe: preprocessing2.PreprocessedDataFrame | DataFrame) ->
         raise ValueError('Input data must be either a Pandas DataFrame or PreprocessedDataFrame')
 
 
-def check_weights(dataset: DataFrame | preprocessing2.PreprocessedDataFrame) -> None:
+def is_no_weights_dataframe(dataframe: preprocessing2.PreprocessedDataFrame | DataFrame):
+    is_dataframe(dataframe)
+    if isinstance(dataframe, preprocessing2.PreprocessedDataFrame):
+        return dataframe.dataframe.columns.size == 2
+    else:
+        return dataframe.columns.size == 2
+
+
+def check_weights_dataframe(dataset: DataFrame | preprocessing2.PreprocessedDataFrame) -> None:
     user_id_column = 0
     item_id_column = 1
     weights_column = 2

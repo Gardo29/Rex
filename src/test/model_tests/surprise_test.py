@@ -47,22 +47,21 @@ class SurpriseTest(RexModelTestUtility, ABC):
     def test_fit(self):
         self._rex_algo()().fit(self._dataset, verbose=False)
 
+    def test_fit_no_weights(self):
+        self._rex_algo()().fit(self._dataset_no_weights, verbose=False)
+
     def test_fit_wrong_dataset(self):
         with self.assertRaises(ValueError):
             self._rex_algo()().fit("wrong dataset")
-
-    def test_predict(self):
-        self.assertTrue(self.check_equals_predict(random_state=False))
 
     def test_grid_search_cv(self):
         grid = GridSearchCV(self._rex_algo()(), self._grid_search_parameters(), scoring=self._evaluation)
         # grid.fit(self._dataset)
         # grid.predict(self._testset, k=self._k)
 
-    def check_equals_predict(self, random_state=True) -> bool:
+    def check_equals_predict(self, random_state=True):
         rex_model = self._rex_algo()(random_state=self._random_state) if random_state else self._rex_algo()()
         rex_predictions = rex_model.fit(self._dataset, verbose=False).predict(self._testset, k=self._k)
-        final_rex = self._rex_to_list(rex_predictions)
 
         surprise_model = self._surprise_algo()(random_state=self._random_state) if random_state else \
             self._surprise_algo()()
@@ -72,6 +71,6 @@ class SurpriseTest(RexModelTestUtility, ABC):
         final_surprise = self._manage_predictions(surprise_predictions,
                                                   lambda x: x.uid,
                                                   lambda x: x.est,
-                                                  lambda x: [x.uid, x.iid])
+                                                  lambda x: x.iid)
 
-        return np.array_equal(final_surprise, final_rex)
+        self.assertEqual(final_surprise, rex_predictions)

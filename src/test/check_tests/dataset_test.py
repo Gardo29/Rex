@@ -6,7 +6,7 @@ from pandas.api.types import (is_integer_dtype, is_float_dtype, is_string_dtype)
 from rex.preprocessing import PreprocessPipeline, Map
 from test.BaseTest import BaseTest
 from test.base_datasets_test import BaseDatasetsTest
-from rex.tools import check_weights
+from rex.tools import check_weights_dataframe
 
 
 class DatasetTest(BaseTest):
@@ -62,11 +62,11 @@ class DatasetTest(BaseTest):
         float_weights_dataset.weight = float_weights_dataset.weight.astype('float')
 
         self.assertTrue(is_integer_dtype(integer_weights_dataset.weight.dtype))
-        self.not_fallible_test(lambda: check_weights(integer_weights_dataset))
+        self.not_fallible_test(lambda: check_weights_dataframe(integer_weights_dataset))
 
         self.assertTrue(is_float_dtype(float_weights_dataset.weight.dtype))
-        self.not_fallible_test(lambda: check_weights(float_weights_dataset))
+        self.not_fallible_test(lambda: check_weights_dataframe(float_weights_dataset))
 
     def _exception_test(self, dataset):
         with self.assertRaises(ValueError):
-            check_weights(dataset)
+            check_weights_dataframe(dataset)

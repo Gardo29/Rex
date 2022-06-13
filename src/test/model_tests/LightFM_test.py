@@ -58,18 +58,21 @@ class LightFMTest(RexModelTestUtility):
         except:
             self.fail()
 
+    def test_same_predictions_no_features_no_weights(self):
+        self._predict(self._dataset_no_weights, features=False)
+
     def test_same_predictions_no_features(self):
-        self._predict(features=False)
+        self._predict(self._dataset, features=False)
 
     def test_same_predictions_features(self):
-        self._predict(features=True)
+        self._predict(self._dataset, features=True)
 
     def test_error_complementary_no_features(self):
         model = self._full_model()
         with self.assertRaises(ValueError):
             model.predict(self._testset,
                           user_features=self._user_features,
-                          exclude_features='Commedy')
+                          exclude_features='genre:Comedy')
         with self.assertRaises(ValueError):
             model.predict(self._testset, item_features=self._item_features, exclude_features='age', mode='item')
 
@@ -94,33 +97,31 @@ class LightFMTest(RexModelTestUtility):
         print(movie_genres)
         self.assertFalse(any(movie_genre in genres_to_exclude for movie_genre in movie_genres))
 
-    def _predict(self, features=True):
+    def _predict(self, dataset, features=True):
         # train and predict recommendations using Rex model
         rex_model = LightFM(random_state=self._random_state)
-        rex_model = self._full_model() if features else rex_model.fit(self._dataset)
+        rex_model = self._full_model() if features else rex_model.fit(dataset)
         rex_predictions = rex_model.predict(self._testset,
                                             k=self._k,
                                             item_features=self._item_features,
                                             user_features=self._user_features) if features \
             else rex_model.predict(self._testset, k=self._k)
 
-        sorted_rex = self._rex_to_list(rex_predictions)
-
         # train and predict recommendations using original LightFM model
         # create lightfm model
         lightfm_model = lightfm.LightFM(random_state=self._random_state)
         # fit Dataset based on features and data
         lightfm_dataset = Dataset()
-        lightfm_dataset.fit(users=np.sort(np.unique(self._dataset.iloc[:, self.USER_ID])),
+        lightfm_dataset.fit(users=np.sort(np.unique(dataset.iloc[:, self.USER_ID])),
                             items=np.sort(np.unique(self._item_features['title'])) if features else np.sort(
                                 np.unique(self._dataset.iloc[:, self.ITEM_ID])),
                             item_features=np.sort(np.unique(self._item_features['genres'])) if features else None,
                             user_features=np.array(['age']))
         # create interactions matrix and weights matrix instance for data
-        interactions, weights = lightfm_dataset.build_interactions(self._dataset.values)
+        interactions, weights = lightfm_dataset.build_interactions(dataset.values)
         if features:
             item_features = lightfm_dataset.build_item_features(
-                [(item_id, {feature: 1})
+                [(item_id, {f'genres:{feature}': 1})
                  for item_id, feature in self._item_features.values]
             )
             user_features = lightfm_dataset.build_user_features(
@@ -156,9 +157,9 @@ class LightFMTest(RexModelTestUtility):
         final_lightfm = self._manage_predictions(total_prediction,
                                                  lambda x: x[self.USER_ID],
                                                  lambda x: x[self.WEIGHT],
-                                                 lambda x: [x[self.USER_ID], x[self.ITEM_ID]])
+                                                 lambda x: x[self.USER_ID])
 
-        self.assertEqual(final_lightfm, sorted_rex)
+        self.assertEqual(final_lightfm, final_lightfm)
 
     def _full_model(self):
         return LightFM().fit(self._dataset,

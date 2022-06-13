@@ -7,11 +7,11 @@ from test.model_tests.surprise_test import SurpriseTest
 
 # TODO grid search
 class SlopeOneTest(SurpriseTest):
-    def _grid_search_parameters(self) -> dict:
-        return {}
-
     def setUp(self) -> None:
         super(SlopeOneTest, self).setUp()
+
+    def _grid_search_parameters(self) -> dict:
+        return {}
 
     def _rex_algo(self):
         return SlopeOne
@@ -22,5 +22,8 @@ class SlopeOneTest(SurpriseTest):
     def _get_default_params(self) -> dict:
         return dict()
 
-    def test_grid_search_cv(self):
-        super(SlopeOneTest, self).test_grid_search_cv()
+    def test_fit_no_weights(self):
+        return super(SlopeOneTest, self).test_fit_no_weights()
+
+    def test_predict(self):
+        self.check_equals_predict(random_state=False)

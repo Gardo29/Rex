@@ -6,7 +6,7 @@ from pandas.api.types import (is_integer_dtype, is_float_dtype, is_string_dtype)
 from rex.preprocessing import PreprocessPipeline, Map
 from test.BaseTest import BaseTest
 from test.base_datasets_test import BaseDatasetsTest
-from rex.tools import check_weights, check_features
+from rex.tools import check_weights_dataframe, check_features
 
 
 class DatasetTest(BaseTest):
