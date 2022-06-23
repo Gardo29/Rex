@@ -472,7 +472,7 @@ def _base_transformation(dataframe, duplicates_subset, verbose=True):
 
 
 def auto_preprocess_weights_dataframe(dataframe, verbose=True):
-    tools.is_dataframe(dataframe)
+    tools.check_is_dataframe(dataframe)
 
     if dataframe.columns.size < 2:
         raise ValueError('DataFrame must have at least the column with user ids and a column with item ids')
@@ -507,7 +507,7 @@ def auto_preprocess_weights_dataframe(dataframe, verbose=True):
 
 
 def auto_preprocess_features_dataframe(dataframe: pd.DataFrame, verbose=True) -> pd.DataFrame:
-    tools.is_dataframe(dataframe)
+    tools.check_is_dataframe(dataframe)
 
     if dataframe.columns.size < 2:
         raise ValueError("Features DataFrame must have id column and at least one feature column")

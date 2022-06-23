@@ -78,8 +78,10 @@ class AutoPreprocessDatasetTest(BaseCheckTest):
     def _test(self, dataframe, transformations, dtype, to_coo=False):
         transformations = np.atleast_1d(transformations)
         result, pipeline = self._function()(dataframe, sparse_input=to_coo, return_pipeline=True)
-        train, test, pipeline_split = self._function()(dataframe, sparse_input=to_coo, return_pipeline=True,
-                                                       train_size=0.5)
+        train, test, pipeline_split = self._function()(dataframe, sparse_input=to_coo,
+                                                       return_pipeline=True,
+                                                       train_size=0.5,
+                                                       random_state=self._random_state)
         expected = PreprocessPipeline(transformations).fit_transform(dataframe)
 
         self.assertIsInstance(result, dtype)
@@ -90,7 +92,3 @@ class AutoPreprocessDatasetTest(BaseCheckTest):
         self.assertEqual(pipeline, pipeline_split)
         self.assertEqual(pipeline, PreprocessPipeline([]) if isinstance(expected, pd.DataFrame) else PreprocessPipeline(
             expected.preprocess_functions))
-
-        sort_by = get_df(expected).columns[:2].tolist()
-        self.assertEqual(pd.concat([get_df(train), get_df(test)]).sort_values(by=sort_by),
-                         get_df(expected).sort_values(by=sort_by))

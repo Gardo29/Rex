@@ -13,10 +13,4 @@ movielens_tags = pd.read_csv(RES_PATH + MOVIE_LENS_TAGS)
 
 valid_algo = {'KNNBaseline', 'SlopeOne', 'SVD', 'LightFM', 'auto'}
 
-rex = Rex('LightFM')
-
-# rex.fit(movielens)  # user_features=
-# print(rex.predict(movielens.sample(300), item_features=movielens_movie_features, k=40, mode='item'))
-
-rex.fit(movielens, item_features=movielens_movie_features)  # user_features=
-print(rex.predict(movielens.sample(300), item_features=movielens_movie_features, k=40, mode='item'))
+rex = LightFM

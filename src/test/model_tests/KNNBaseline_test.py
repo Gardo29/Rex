@@ -13,7 +13,8 @@ class KNNBaselineTest(SurpriseTest):
         super(KNNBaselineTest, self).setUp()
 
     def _grid_search_parameters(self) -> dict:
-        return {}
+        return {'k': [40, 50, 60],
+                'min_k': [1, 10, 100]}
 
     def _rex_algo(self) -> type:
         return KNNBaseline
@@ -28,5 +29,11 @@ class KNNBaselineTest(SurpriseTest):
                 'bsl_options': {},
                 'verbose': True}
 
-    def test_predict(self):
-        self.check_equals_predict(random_state=False)
+    def test_predict_user(self):
+        self._check_equals_predict_user(random_state=False)
+
+    def test_predict_item(self):
+        self._check_equals_predict_item(random_state=False)
+
+    def test_grid_search_cv(self):
+        super(KNNBaselineTest, self).test_grid_search_cv()

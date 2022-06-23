@@ -7,11 +7,29 @@ import numpy as np
 import seaborn as sns
 from pandas import DataFrame
 from sklearn import preprocessing
+from collections import defaultdict
 
 from rex import preprocessing2
 
+# --------------- CONSTANTS --------------------
+USER_ID = 0
+ITEM_ID = 1
+WEIGHT = 2
+FEATURE_ID = 0
+DEFAULT_WEIGHT = 1
+CATEGORICAL_FEATURE_WEIGHT = 1
+WEIGHT_NAME = 'weight'
+
 
 # --------------- UTILITY --------------------
+
+def groupby(iterable, key_function):
+    groups = defaultdict(list)
+    for item in iterable:
+        groups[key_function(item)].append(item)
+    return dict(groups)
+
+
 def unique(array: np.ndarray | list):
     if isinstance(array, list):
         array = np.array(array)
@@ -19,6 +37,22 @@ def unique(array: np.ndarray | list):
         return np.unique(array)
     else:
         return list(set(array))
+
+
+def add_weight(dataframe: DataFrame | preprocessing2.PreprocessedDataFrame,
+               weight: float | int) -> Union[DataFrame | preprocessing2.PreprocessedDataFrame]:
+    check_is_dataframe_or_preprocessed_dataframe(dataframe)
+
+    if isinstance(dataframe, DataFrame):
+        dataframe = dataframe.copy(deep=True)
+        dataframe[WEIGHT_NAME] = weight
+
+    if isinstance(dataframe, preprocessing2.PreprocessedDataFrame):
+        new_dataframe = dataframe.dataframe.copy(deep=True)
+        new_dataframe[WEIGHT_NAME] = weight
+        dataframe = preprocessing2.PreprocessedDataFrame(new_dataframe, dataframe.preprocess_functions)
+
+    return dataframe
 
 
 # ------------- DATAFRAME LOADING -------------
@@ -42,13 +76,19 @@ def get_df(dataframe: DataFrame | preprocessing2.PreprocessedDataFrame) -> DataF
 
 
 # ---------------- CHECKS ---------------
-def is_dataframe(dataframe: preprocessing2.PreprocessedDataFrame | DataFrame) -> None:
+def check_is_dataframe(dataframe: DataFrame) -> None:
+    if not isinstance(dataframe, DataFrame):
+        raise ValueError('Input data must be a Pandas DataFrame')
+
+
+def check_is_dataframe_or_preprocessed_dataframe(dataframe: preprocessing2.PreprocessedDataFrame | DataFrame) -> None:
     if not isinstance(dataframe, DataFrame) and not isinstance(dataframe, preprocessing2.PreprocessedDataFrame):
-        raise ValueError('Input data must be either a Pandas DataFrame or PreprocessedDataFrame')
+        raise ValueError(
+            f"Input data must be either a Pandas DataFrame or PreprocessedDataFrame, not '{type(dataframe)}'")
 
 
 def is_no_weights_dataframe(dataframe: preprocessing2.PreprocessedDataFrame | DataFrame):
-    is_dataframe(dataframe)
+    check_is_dataframe(dataframe)
     if isinstance(dataframe, preprocessing2.PreprocessedDataFrame):
         return dataframe.dataframe.columns.size == 2
     else:
@@ -61,7 +101,7 @@ def check_weights_dataframe(dataset: DataFrame | preprocessing2.PreprocessedData
     weights_column = 2
     min_columns = 2
     max_columns = 3
-    is_dataframe(dataset)
+    check_is_dataframe_or_preprocessed_dataframe(dataset)
     if not (min_columns <= get_df(dataset).columns.size <= max_columns):
         raise ValueError("Pandas DataFrame must have 2 or 3 columns")
     if get_df(dataset).columns.size == max_columns and not is_numerical(get_df(dataset).iloc[:, weights_column],
@@ -76,7 +116,7 @@ def check_weights_dataframe(dataset: DataFrame | preprocessing2.PreprocessedData
 def check_features(dataframe: DataFrame | preprocessing2.PreprocessedDataFrame):
     min_columns = 2
     feature_id_column = 0
-    is_dataframe(dataframe)
+    check_is_dataframe_or_preprocessed_dataframe(dataframe)
     if get_df(dataframe).columns.size < min_columns:
         raise ValueError("Pandas DataFrame must have at least 2 columns")
     if has_na(dataframe):

@@ -12,7 +12,8 @@ class SVDTest(SurpriseTest):
         super(SVDTest, self).setUp()
 
     def _grid_search_parameters(self) -> dict:
-        return {}
+        return {'n_factors': [100, 200],
+                'n_epochs': [20, 30, 40]}
 
     def _rex_algo(self) -> type:
         return SVD
@@ -39,5 +40,8 @@ class SVDTest(SurpriseTest):
                 'random_state': None,
                 'verbose': False}
 
-    def test_predict(self):
-        self.check_equals_predict(random_state=True)
+    def test_predict_user(self):
+        self._check_equals_predict_user(random_state=True)
+
+    def test_predict_item(self):
+        self._check_equals_predict_item(random_state=True)

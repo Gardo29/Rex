@@ -22,8 +22,8 @@ class SlopeOneTest(SurpriseTest):
     def _get_default_params(self) -> dict:
         return dict()
 
-    def test_fit_no_weights(self):
-        return super(SlopeOneTest, self).test_fit_no_weights()
+    def test_predict_user(self):
+        self._check_equals_predict_user(random_state=False)
 
-    def test_predict(self):
-        self.check_equals_predict(random_state=False)
+    def test_predict_item(self):
+        self._check_equals_predict_item(random_state=False)

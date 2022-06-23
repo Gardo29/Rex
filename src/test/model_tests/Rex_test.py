@@ -1,3 +1,4 @@
+from sklearn.utils.estimator_checks import check_estimator
 from sklearn.utils.validation import check_is_fitted
 
 from rex.model import Rex, LightFM, SVD, KNNBaseline, RexBaseModel, SlopeOne
@@ -8,6 +9,8 @@ from test.model_tests.rex_model_test_utility import RexModelTestUtility
 class RexTest(RexModelTestUtility):
     def setUp(self) -> None:
         super(RexTest, self).setUp()
+        self._dataset = self._dataset.sample(200)
+        self._testset = self._dataset.sample(50)
         self._valid_algo = {'SlopeOne', 'KNNBaseline', 'LightFM', 'SVD'}
 
     def test_start_single_algo(self):
@@ -101,6 +104,10 @@ class RexTest(RexModelTestUtility):
         except:
             self.fail()
 
+    def test_one_algo_is_best_algo(self):
+        rex = Rex('LightFM').fit(self._dataset)
+        self.assertIsInstance(rex.best_model_, LightFM)
+
     def test_error_wrong_dataset_no_auto_on(self):
         with self.assertRaises(ValueError):
             self._dataset['added_column'] = 0
@@ -147,7 +154,7 @@ class RexTest(RexModelTestUtility):
         self.assertTrue(rex.preprocess_pipelines_['item_features'] is not None)
         self.assertTrue(rex.preprocess_pipelines_['user_features'] is not None)
 
-    def test_pipelines_not_empty_preprocessed_dataframe_input(self):
+    def test_no_pipeline_preprocessed_dataframe_input(self):
         useless_pipeline = PreprocessPipeline([
             Update({'to_remove': 1}),
             Drop('to_remove')
@@ -159,9 +166,49 @@ class RexTest(RexModelTestUtility):
         rex = Rex('LightFM', auto_preprocess=False).fit(self._dataset,
                                                         item_features=self._item_features,
                                                         user_features=self._user_features)
-        self.assertTrue(rex.preprocess_pipelines_['weights'] is not None)
-        self.assertTrue(rex.preprocess_pipelines_['item_features'] is not None)
-        self.assertTrue(rex.preprocess_pipelines_['user_features'] is not None)
+        self.assertFalse(hasattr(rex, 'preprocess_pipelines_'))
+
+    def check_sklearn_compatibility(self):
+        self.not_fallible_test(lambda: check_estimator(self))
+
+    def test_check_all(self):
+        algos = ['auto', ['LightFM', 'SVD']]
+        algo_params = [{
+            'LightFM': {'no_components': 100},
+            'SVD': {'n_factors': 400}
+        }, {}]
+        ks = [10, 5000]
+        auto_preprocess = [True, False]
+        metric_params = [{
+            'k': 200
+        }]
+        extra_params = [
+            {'item_features': self._user_features,
+             'user_features': self._item_features},
+            {'item_features': self._user_features},
+            {'user_features': self._item_features},
+            {'LightFM': {'epochs': 50}},
+            {}
+        ]
+        verbose = [True, False]
+        is_user_predictions = [True, False]
+
+        for algo in algos:
+            for algo_param in algo_params:
+                for metric_param in metric_params:
+                    for preprocess in auto_preprocess:
+                        for is_verbose in verbose:
+                            for k in ks:
+                                for is_user_prediction in is_user_predictions:
+                                    for extra_param in extra_params:
+                                        model = Rex(algo, preprocess, metric_params=metric_param, **algo_param)
+                                        self.not_fallible_test(lambda: model.fit(self._dataset,
+                                                                                 verbose=is_verbose,
+                                                                                 **extra_param))
+                                        self.not_fallible_test(lambda: model.predict(self._testset,
+                                                                                     k=k,
+                                                                                     is_user_prediction=is_user_prediction,
+                                                                                     **extra_param))
 
     def _full_rex(self):
         return Rex().fit(self._dataset, item_features=self._item_features, user_features=self._user_features)

@@ -6,7 +6,7 @@ import numpy as np
 
 from rex.preprocessing2 import Map, PreprocessPipeline, DropDuplicates, Drop
 from rex.tools import unique
-from test.BaseTest import BaseTest
+from test.base_test import BaseTest
 
 RES_PATH = '../../../resources'
 MOVIE_LENS_RATINGS = '/ml-small/ratings.csv'
@@ -23,9 +23,7 @@ class BaseDatasetsTest(BaseTest):
             'userId': np.sort(unique(self._dataset.userId.values)),
             'age': np.random.randint(10, 100, len(unique(self._dataset.userId.values)))
         })
-        self.USER_ID = 0
-        self.ITEM_ID = 1
-        self.WEIGHT = 2
+        self._random_state = 1234
         # replace movie id with titles
         self._dataset = PreprocessPipeline([
             Map('movieId', {movie_id: name for movie_id, name in self._item_features.iloc[:, :2].values}),

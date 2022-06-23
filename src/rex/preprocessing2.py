@@ -22,7 +22,7 @@ from sklearn.base import TransformerMixin, BaseEstimator
 from sklearn.preprocessing import LabelEncoder  # for matrix inversion
 
 from rex import tools
-from rex.model_selection import train_test_split
+from rex import model_selection
 
 
 class PreprocessedDataFrame:
@@ -659,11 +659,11 @@ def auto_preprocess_weights_dataframe(dataframe: DataFrame,
     max_columns = 3
     min_columns = 2
 
-    tools.is_dataframe(dataframe)
+    tools.check_is_dataframe(dataframe)
 
     if tools.is_no_weights_dataframe(dataframe):
         if train_size:
-            train, test = train_test_split(dataframe, train_size, random_state)
+            train, test = model_selection.train_test_split(dataframe, train_size, random_state)
             return (train, test, PreprocessPipeline([], verbose=verbose)) if return_pipeline else (train, test)
         else:
             return dataframe, PreprocessPipeline([], verbose=verbose) if return_pipeline else dataframe
@@ -700,7 +700,7 @@ def auto_preprocess_weights_dataframe(dataframe: DataFrame,
 
     # split
     if train_size:
-        train, test = train_test_split(dataframe, train_size, random_state)
+        train, test = model_selection.train_test_split(dataframe, train_size, random_state)
         # split and is PreprocessedDataFrame
         if isinstance(dataframe, PreprocessedDataFrame):
             if return_pipeline:
@@ -729,7 +729,7 @@ def auto_preprocess_features_dataframe(dataframe: DataFrame,
     divider = '|'
     cumulative_percent = 70
 
-    tools.is_dataframe(dataframe)
+    tools.check_is_dataframe(dataframe)
 
     if dataframe.columns.size < 2:
         raise ValueError("Features DataFrame must have id column and at least one feature column")
