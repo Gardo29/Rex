@@ -179,9 +179,10 @@ class RexTest(RexModelTestUtility):
         }, {}]
         ks = [10, 5000]
         auto_preprocess = [True, False]
+        metrics = ['precision_k', 'recall_k']
         metric_params = [{
             'k': 200
-        }]
+        }, {}]
         extra_params = [
             {'item_features': self._user_features,
              'user_features': self._item_features},
@@ -197,18 +198,23 @@ class RexTest(RexModelTestUtility):
             for algo_param in algo_params:
                 for metric_param in metric_params:
                     for preprocess in auto_preprocess:
-                        for is_verbose in verbose:
-                            for k in ks:
-                                for is_user_prediction in is_user_predictions:
-                                    for extra_param in extra_params:
-                                        model = Rex(algo, preprocess, metric_params=metric_param, **algo_param)
-                                        self.not_fallible_test(lambda: model.fit(self._dataset,
-                                                                                 verbose=is_verbose,
-                                                                                 **extra_param))
-                                        self.not_fallible_test(lambda: model.predict(self._testset,
-                                                                                     k=k,
-                                                                                     is_user_prediction=is_user_prediction,
+                        for metric in metrics:
+                            for is_verbose in verbose:
+                                for k in ks:
+                                    for is_user_prediction in is_user_predictions:
+                                        for extra_param in extra_params:
+                                            model = Rex(algo,
+                                                        preprocess,
+                                                        metric=metric,
+                                                        metric_params=metric_param,
+                                                        **algo_param)
+                                            self.not_fallible_test(lambda: model.fit(self._dataset,
+                                                                                     verbose=is_verbose,
                                                                                      **extra_param))
+                                            self.not_fallible_test(lambda: model.predict(self._testset,
+                                                                                         k=k,
+                                                                                         is_user_prediction=is_user_prediction,
+                                                                                         **extra_param))
 
     def _full_rex(self):
         return Rex().fit(self._dataset, item_features=self._item_features, user_features=self._user_features)
