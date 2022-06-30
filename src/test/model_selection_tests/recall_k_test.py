@@ -7,32 +7,32 @@ from pandas import DataFrame
 from lightfm import evaluation
 from rex.model import LightFM
 from rex.tools import WEIGHT, ITEM_ID, USER_ID, unique, groupby
-from rex.model_evaluation import precision_k
+from rex.model_evaluation import recall_k
 from test.model_tests.rex_model_test_utility import RexModelTestUtility
 
 
-class PrecisionKTest(RexModelTestUtility):
+class RecallKTest(RexModelTestUtility):
     def setUp(self) -> None:
-        super(PrecisionKTest, self).setUp()
+        super(RecallKTest, self).setUp()
         self._model = LightFM(random_state=self._random_state).fit(self._dataset,
                                                                    item_features=self._item_features,
                                                                    user_features=self._user_features)
 
     def test_invalid_input(self):
         with self.assertRaises(ValueError):
-            precision_k(self._model, 'wrong_testset', 'wrong_predictions')
+            recall_k(self._model, 'wrong_testset', 'wrong_predictions')
 
     def test_metric_result_is_a_dict(self):
-        self.assertIsInstance(precision_k(self._model, self._testset), dict)
+        self.assertIsInstance(recall_k(self._model, self._testset), dict)
 
     def test_metric_result_contains_all_user_ids_from_testset(self):
-        precisions = precision_k(self._model, self._testset)
+        precisions = recall_k(self._model, self._testset)
         self.assertTrue(all(user in precisions.keys() for user in unique(self._testset.userId)))
 
-    def test_user_precision(self):
+    def test_user_recall(self):
         self._metric_and_check(is_user_prediction=True)
 
-    def test_item_precision(self):
+    def test_item_recall(self):
         self._metric_and_check(is_user_prediction=False)
 
     def _metric_and_check(self, is_user_prediction=True):
@@ -100,11 +100,11 @@ class PrecisionKTest(RexModelTestUtility):
         # ---------- compute precisions ----------
         csr_testset, _ = lightfm_dataset.build_interactions(self._testset.values)
         if is_user_prediction:
-            light_fm_precision = evaluation.precision_at_k(lightfm_model,
-                                                           csr_testset,
-                                                           k=self._k,
-                                                           item_features=item_features,
-                                                           user_features=user_features).mean()
+            light_fm_precision = evaluation.recall_at_k(lightfm_model,
+                                                        csr_testset,
+                                                        k=self._k,
+                                                        item_features=item_features,
+                                                        user_features=user_features).mean()
         else:
             id_pairs = list(product(self._model.user_ids_, np.sort(unique(self._testset.values[:, ITEM_ID]))))
             user_ids = [user_id for user_id, _ in id_pairs]
@@ -125,15 +125,15 @@ class PrecisionKTest(RexModelTestUtility):
             for item_id, group in groupby(predictions, lambda x: x[ITEM_ID]).items():
                 k_sorted_group = sorted(group, key=lambda x: (x[WEIGHT], x[USER_ID]), reverse=True)[:self._k]
                 mapped = list(map(lambda x: x[USER_ID], k_sorted_group))
-                precisions[item_id] = len(set(mapped) & real_values[item_id]) / self._k
+                precisions[item_id] = len(set(mapped) & real_values[item_id]) / len(real_values[item_id])
             light_fm_precision = np.array(list(precisions.values())).mean()
 
-        rex_precision = np.array(list(precision_k(self._model,
-                                                  self._testset,
-                                                  k=self._k,
-                                                  item_features=self._item_features,
-                                                  is_user_prediction=is_user_prediction,
-                                                  user_features=self._user_features).values())).mean()
+        rex_precision = np.array(list(recall_k(self._model,
+                                               self._testset,
+                                               k=self._k,
+                                               item_features=self._item_features,
+                                               is_user_prediction=is_user_prediction,
+                                               user_features=self._user_features).values())).mean()
         # ---------- check precisions are equal ----------
 
         self.assertAlmostEqual(light_fm_precision, rex_precision)

@@ -483,6 +483,10 @@ class Rex(BaseCoreModel):
             if metric == 'precision_k':
                 return lambda train_set, model: dict_to_mean(
                     model_evaluation.precision_k(model, train_set, **self.metric_params))
+
+            if metric == 'recall_k':
+                return lambda train_set, model: dict_to_mean(
+                    model_evaluation.recall_k(model, train_set, **self.metric_params))
             else:
                 raise ValueError(f"'metric' as a string must be one of the following values: {self._metrics}")
         elif isinstance(metric, Callable):
@@ -612,7 +616,7 @@ class Rex(BaseCoreModel):
                 # if user features are a DataFrame and there is the pipeline -> preprocess
                 if isinstance(item_features, DataFrame) and 'item_features' in self.preprocess_pipelines_:
                     kwargs['item_features'] = self.preprocess_pipelines_['item_features'].transform(item_features)
-    
+
         return super(Rex, self).predict(x,
                                         item_ids,
                                         k,
