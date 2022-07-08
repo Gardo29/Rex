@@ -228,6 +228,7 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(update_df.dataframe.dropna(), drop_nans_df.dataframe)
         print('DropNa on all dataframe test succeeded')
 
+    # TODO correct BIN test
     def test_bin_correct_output(self):
         columns_dict = {'rating': [1.0, 2.0, 3.0, 4.0, 5.0]}
         bin_preprocess = PreprocessPipeline([Update(columns_dict),
