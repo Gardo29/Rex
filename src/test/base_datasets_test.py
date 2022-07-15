@@ -4,7 +4,7 @@ from pandas.testing import assert_frame_equal
 from pandas.testing import assert_series_equal
 import numpy as np
 
-from rex.preprocessing2 import Map, PreprocessPipeline, DropDuplicates, Drop
+from rex.preprocessing import Map, PreprocessPipeline, DropDuplicates, Drop
 from rex.tools import unique
 from test.base_test import BaseTest
 

@@ -2,7 +2,7 @@ from typing import Callable
 
 import pandas as pd
 
-from rex.preprocessing2 import auto_preprocess_features_dataframe, OneHotEncode, BinCumulative, PreprocessPipeline, \
+from rex.preprocessing import auto_preprocess_features_dataframe, OneHotEncode, BinCumulative, PreprocessPipeline, \
     Select, DropDuplicates, DropNa, MinMaxScaler, PreprocessedDataFrame
 from test.base_datasets_test import BaseDatasetsTest
 import numpy as np

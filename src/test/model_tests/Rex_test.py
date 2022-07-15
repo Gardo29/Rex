@@ -2,7 +2,7 @@ from sklearn.utils.estimator_checks import check_estimator
 from sklearn.utils.validation import check_is_fitted
 
 from rex.model import Rex, LightFM, SVD, KNNBaseline, RexBaseModel, SlopeOne
-from rex.preprocessing2 import PreprocessPipeline, Update, Drop
+from rex.preprocessing import PreprocessPipeline, Update, Drop
 from test.model_tests.rex_model_test_utility import RexModelTestUtility
 
 

@@ -8,7 +8,7 @@ from pandas import DataFrame
 from sklearn import model_selection
 from surprise import Dataset, Reader
 
-from rex import preprocessing2, tools
+from rex import preprocessing, tools
 
 
 def train_anti_test_split(dataset: DataFrame | preprocessing2.PreprocessedDataFrame,
@@ -36,11 +36,11 @@ def train_anti_test_split(dataset: DataFrame | preprocessing2.PreprocessedDataFr
         else preprocessing2.PreprocessedDataFrame(dataframe, dataset.preprocess_functions)
 
 
-def train_test_split(dataset: DataFrame | preprocessing2.PreprocessedDataFrame,
-                     train_size: int | float = 0.75,
-                     random_state: int | RandomState | None = None) -> Union[(DataFrame, DataFrame),
-                                                                             (preprocessing2.PreprocessedDataFrame,
-                                                                              preprocessing2.PreprocessedDataFrame)]:
+def generate_train_test(dataset: DataFrame | preprocessing2.PreprocessedDataFrame,
+                        train_size: int | float = 0.75,
+                        random_state: int | RandomState | None = None) -> Union[(DataFrame, DataFrame),
+                                                                                (preprocessing2.PreprocessedDataFrame,
+                                                                                 preprocessing2.PreprocessedDataFrame)]:
     def split(input_dataset: DataFrame) -> (DataFrame, DataFrame):
         # return model_selection.train_test_split(input_dataset, train_size=train_size, random_state=random_state)
         if isinstance(train_size, int):

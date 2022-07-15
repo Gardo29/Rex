@@ -1,6 +1,6 @@
 import pandas as pd
 
-from rex.preprocessing2 import PreprocessPipeline, Map, Drop, Bin
+from rex.preprocessing import PreprocessPipeline, Map, Drop, Bin
 from test.base_test import BaseTest
 from test.base_datasets_test import BaseDatasetsTest
 

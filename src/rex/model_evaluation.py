@@ -5,7 +5,7 @@ from typing import Optional
 from pandas import DataFrame
 import numpy as np
 from rex import model
-from rex.preprocessing2 import PreprocessedDataFrame
+from rex.preprocessing import PreprocessedDataFrame
 from rex.tools import (check_is_dataframe_or_preprocessed_dataframe,
                        unique,
                        ITEM_ID,

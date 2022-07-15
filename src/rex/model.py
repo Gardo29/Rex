@@ -16,7 +16,7 @@ from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 
 import rex.tools
 from rex import model_evaluation
-from rex.preprocessing2 import PreprocessedDataFrame, auto_preprocess_weights_dataframe, PreprocessPipeline, \
+from rex.preprocessing import PreprocessedDataFrame, auto_preprocess_weights_dataframe, PreprocessPipeline, \
     auto_preprocess_features_dataframe
 from rex.tools import (check_weights_dataframe,
                        check_is_dataframe_or_preprocessed_dataframe,
@@ -74,7 +74,7 @@ def compute_predictions(predictions,
 
 # ---------------- MODELS --------------
 
-class RexBaseModel(ABC, BaseEstimator):
+class RexBaseModel(ABC, BaseEstimator, object):
     def fit(self, dataset: DataFrame | PreprocessedDataFrame, y=None, verbose: bool = True, **kwargs) -> Any:
         check_weights_dataframe(dataset)
         # checks datasets
@@ -183,13 +183,17 @@ class RexBaseModel(ABC, BaseEstimator):
                          **kwargs) -> DataFrame:
         pass
 
-    def set_params(self, **kwargs) -> Any:
+    def set_params(self, **params) -> Any:
         # reset attributes post fit
         fit_attributes_regex = re.compile('.*_$')
         for attribute in filter(fit_attributes_regex.match, self.__dict__):
             if hasattr(self, attribute):
                 delattr(self, attribute)
-        return self
+        return self._set_params(**params)
+
+    @abstractmethod
+    def _set_params(self, **kwargs) -> Any:
+        pass
 
     @abstractmethod
     def get_params(self, deep=True) -> dict:
@@ -201,13 +205,15 @@ class RexWrapperModel(RexBaseModel, ABC):
         self._model_class = model_class
         self._model = model_class(**kwargs)
 
-    def set_params(self, **params) -> Any:
-        super(RexWrapperModel, self).set_params(**params)
+    def _set_params(self, **params) -> Any:
         self._model = self._model_class(**params)
         return self
 
     def get_params(self, deep=True):
-        return self._model.__dict__
+        return {key: val for key, val in self._model.__dict__.items() if key not in self._excluded_params()}
+
+    def _excluded_params(self) -> list[str]:
+        return []
 
     def __eq__(self, other):
         return isinstance(other, self.__class__) and self.get_params() == other.get_params()
@@ -245,14 +251,28 @@ class SurpriseModel(RexWrapperModel):
         # calculates all pairs predictions
         all_predictions = [self._model.predict(user_id, item_id, clip=False, **kwargs)
                            for user_id, item_id in id_pairs]
+
         # extract top k predictions
+        # function for pickle, not lambda
+        def filter_function(prediction):
+            return not prediction.details['was_impossible']
+
+        def key_function(prediction):
+            return prediction.uid if is_user_prediction else prediction.iid
+
+        def sort_function(prediction):
+            return prediction.est, prediction.iid if is_user_prediction else prediction.uid
+
+        def map_function(prediction):
+            return prediction.iid if is_user_prediction else prediction.uid
+
         k_top_predictions_dataframe = compute_predictions(
             predictions=all_predictions,
-            filter_function=lambda x: not x.details['was_impossible'],
+            filter_function=filter_function,
             k=k,
-            key=lambda x: x.uid if is_user_prediction else x.iid,
-            sort_function=lambda x: (x.est, x.iid if is_user_prediction else x.uid),
-            map_function=lambda x: x.iid if is_user_prediction else x.uid
+            key=key_function,
+            sort_function=sort_function,
+            map_function=map_function
         )
         # create dataframe from predictions dict
         return k_top_predictions_dataframe
@@ -295,6 +315,9 @@ class SlopeOne(SurpriseModel):
         # class attributes after training
         self.user_means_ = self._model.user_mean
         return self
+
+    def _excluded_params(self) -> list[str]:
+        return ['bsl_options', 'sim_options']
 
 
 class LightFM(RexWrapperModel):
@@ -383,20 +406,30 @@ class LightFM(RexWrapperModel):
                 # remove those users from ids_pairs
                 id_pairs = {(user_id, item_id) for user_id, item_id in id_pairs if item_id not in item_to_be_excluded}
         # create LightFM ids
-        # id_pairs = sorted(list(id_pairs), key=lambda x: (x[0], x[1]))
         unchanged_user_ids = [user_id for user_id, _ in id_pairs]
         lightfm_user_ids = np.array([self._user_id_map[user_id] for user_id in unchanged_user_ids])
         unchanged_item_ids = [item_id for _, item_id in id_pairs]
         lightfm_item_ids = np.array([self._item_id_map[item_id] for item_id in unchanged_item_ids])
         # compute scores
         scores = self._model.predict(lightfm_user_ids, lightfm_item_ids, **kwargs)
+
         # compute top k predictions
+        # function for pickle, not lambdas
+        def key_function(prediction):
+            return prediction[USER_ID] if is_user_prediction else prediction[ITEM_ID]
+
+        def sort_function(prediction):
+            return prediction[WEIGHT], prediction[ITEM_ID] if is_user_prediction else prediction[USER_ID]
+
+        def map_function(prediction):
+            return prediction[ITEM_ID] if is_user_prediction else prediction[USER_ID]
+
         k_predictions_dataframe = compute_predictions(
             predictions=list(zip(unchanged_user_ids, unchanged_item_ids, scores)),
             k=k,
-            key=lambda x: x[USER_ID] if is_user_prediction else x[ITEM_ID],
-            sort_function=lambda x: (x[WEIGHT], x[ITEM_ID] if is_user_prediction else x[USER_ID]),
-            map_function=lambda x: x[ITEM_ID] if is_user_prediction else x[USER_ID]
+            key=key_function,
+            sort_function=sort_function,
+            map_function=map_function
         )
         return k_predictions_dataframe
 
@@ -477,16 +510,12 @@ class Rex(BaseCoreModel):
 
     def _compute_metric(self, metric):
         if isinstance(metric, str):
-            def dict_to_mean(dictionary):
-                return np.array(list(dictionary.values())).mean()
-
+            # def are for pickle, not lambda
             if metric == 'precision_k':
-                return lambda train_set, model: dict_to_mean(
-                    model_evaluation.precision_k(model, train_set, **self.metric_params))
+                return self._precision_function
 
             if metric == 'recall_k':
-                return lambda train_set, model: dict_to_mean(
-                    model_evaluation.recall_k(model, train_set, **self.metric_params))
+                return self._recall_function
             else:
                 raise ValueError(f"'metric' as a string must be one of the following values: {self._metrics}")
         elif isinstance(metric, Callable):
@@ -588,6 +617,7 @@ class Rex(BaseCoreModel):
                 previous_interactions: Optional[DataFrame | PreprocessedDataFrame] = None,
                 is_user_prediction: bool = True,
                 **kwargs) -> DataFrame:
+        check_is_fitted(self)
         # remove features and give advice
         if not isinstance(self.best_model_, LightFM):
             if 'user_features' in kwargs:
@@ -634,10 +664,21 @@ class Rex(BaseCoreModel):
     def get_params(self, deep=True) -> dict:
         return {model_name: model.get_params() for model_name, model in self.models.items()}
 
-    def set_params(self, **params):
+    def _set_params(self, **params) -> Any:
         if 'algo' in params:
             # change algorithms
             self._init_algo = params.get('algo')
             # remove algo from parameters
             del params['algo']
         self.models = self._compute_algorithms(self._init_algo, **params)
+
+    # function for evaluation
+    @staticmethod
+    def _dict_to_mean(dictionary):
+        return np.array(list(dictionary.values())).mean()
+
+    def _precision_function(self, train_set, model):
+        return self._dict_to_mean(model_evaluation.precision_k(model, train_set, **self.metric_params))
+
+    def _recall_function(self, train_set, model):
+        return self._dict_to_mean(model_evaluation.recall_k(model, train_set, **self.metric_params))

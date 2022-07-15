@@ -1,34 +1,36 @@
 import unittest
 
+import numpy as np
+import pandas as pd
 from pandas.testing import assert_frame_equal  # <-- for testing dataframes
 from pandas.testing import assert_series_equal
-from rex.preprocessing2 import *
+from rex.preprocessing import *
 
 
 class PipelineTests(unittest.TestCase):
     """ class for running unittests"""
+
     def setUp(self):
-        self.test_input_dir = '../../../resources'
-        self.test_file_dir = '/ml-small/ratings.csv'
-        self.test_file_dir2 = '/ml-small/movies.csv'
-        self.test_file_dir3 = '/ml-small/tags.csv'
+        self.resources = '../../../resources'
+        self.ratings = '/ml-small/ratings.csv'
+        self.movie_features = '/ml-small/movies.csv'
+        self.tag_file = '/ml-small/tags.csv'
         try:
-            data = pd.read_csv(self.test_input_dir + self.test_file_dir)
-            features = pd.read_csv(self.test_input_dir + self.test_file_dir2)
-            tags = pd.read_csv(self.test_input_dir + self.test_file_dir3)
-            # Take first 5 rows only
-            self.data = data.head(5)
-            # Full dataset
-            self.features = features
-            self.tags = tags
+            self.data = pd.read_csv(self.resources + self.ratings)
+            self.features = pd.read_csv(self.resources + self.movie_features)
+            self.tags = pd.read_csv(self.resources + self.tag_file)
         except IOError as e:
             print(e)
         # Adding dataframe and series equality assertions to the assertEqual function
-        self.addTypeEqualityFunc(pd.DataFrame, self._assertDataframeEqual)
+        self.addTypeEqualityFunc(pd.DataFrame, self._assertDataFrameEqual)
         self.addTypeEqualityFunc(pd.Series, self._assertSeriesEqual)
+        self.addTypeEqualityFunc(PreprocessedDataFrame, self._assertPreprocessedDataFrameEqual)
 
     # equality supports
-    def _assertDataframeEqual(self, a, b, msg):
+    def _assertPreprocessedDataFrameEqual(self, a, b, msg):
+        self._assertDataFrameEqual(a.dataframe, b.dataframe, msg)
+
+    def _assertDataFrameEqual(self, a, b, msg):
         try:
             assert_frame_equal(a, b, check_dtype=False)
         except AssertionError as e:
@@ -65,38 +67,38 @@ class PipelineTests(unittest.TestCase):
     def test_check_negative_float_clip(self):
         low = -4
         high = 6
-        feature = 'timestamp'
-        self.data[feature] = [9.0, -3.0, 0.0, -9.0, 7.0]
+        feature = 'rating'
+        self.data = Map(feature, lambda x: x - 3).fit_transform(self.data).dataframe
         clip_negative_df = Clip(feature, lower=low, upper=high).fit_transform(self.data)
         self.data[feature] = self.data[feature].clip(lower=low, upper=high)
         self.assertEqual(self.data, clip_negative_df.dataframe)
-        print('Negative float clip test succeeded')
 
-    def test_clip_with_string_and_nan_values(self):
+    def test_clip_raises_error_with_string_and_nan_values(self):
         low = -2
         high = 6
-        feature = 'timestamp'
-        self.data[feature] = [9.0, -3.0, 'not registered', 'NaN', np.nan]
-        # Check when there are strings and NaN involved the exception TypeError is raised
-        with self.assertRaises(TypeError):
-            Clip(feature, lower=low, upper=high).fit_transform(self.data)
-
-        print('Clip with strings and NaN values test succeeded')
+        feature = 'rating'
+        for map_value in ['string', np.nan]:
+            self.data = Map(feature, {3: map_value}).fit_transform(self.data)
+            # Check when there are strings and NaN involved the exception TypeError is raised
+            with self.assertRaises(TypeError):
+                Clip(feature, lower=low, upper=high).fit_transform(self.data)
 
     def test_correct_drop_output(self):
-        feature = 'timestamp'
-        drop_df = Drop(feature).fit_transform(self.data)
-        expected_output = self.data.drop(columns=feature)
-        self.assertEqual(expected_output, drop_df.dataframe)
-        print('Drop test succeeded')
+        for feature in ['timestamp', ['timestamp']]:
+            drop_df = Drop(feature).fit_transform(self.data)
+            expected_output = self.data.drop(columns=feature)
+            self.assertEqual(expected_output, drop_df.dataframe)
 
-    def test_map_using_dict(self):
+    def test_map(self):
         feature = 'rating'
-        to_be_replaced = {4: 'four', 5: np.nan}
-        map_df = Map(feature, to_be_replaced).fit_transform(self.data)
-        self.data[feature] = self.data[feature].map(to_be_replaced)
-        self.assertEqual(self.data, map_df.dataframe)
-        print('Map test with dict succeeded')
+        # lambda mapping
+        lambda_df = Map(feature, lambda x: x - 1).fit_transform(self.data)
+        self.data[feature] = self.data[feature].map(lambda x: x - 1)
+        self.assertEqual(lambda_df.dataframe, self.data)
+        # dict mapping
+        map_df = Map(feature, {4: 'four'}).fit_transform(self.data)
+        self.data[feature] = self.data[feature].map(lambda x: 'four' if x == 4 else x)
+        self.assertEqual(map_df.dataframe, self.data)
 
     def test_correct_map_output(self):
         feature = 'rating'
@@ -106,13 +108,12 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(self.data, map_df.dataframe)
         print('Map test succeeded')
 
-    def test_map_illegal_operation_on_string_and_nan_values(self):
-        feature = 'timestamp'
-        self.data[feature] = [9.0, -3, 'not registered', 'NaN', np.nan]
+    def test_map_illegal_operation_on_string(self):
+        feature = 'rating'
+        mapped_dataframe = Map(feature, {3: 'string'}).fit_transform(self.data)
         # Check when there are strings and NaN involved the exception TypeError is raised
         with self.assertRaises(TypeError):
-            Map(feature, lambda x: x - 1).fit_transform(self.data)
-        print('Map with strings and NaN values test succeeded')
+            Map(feature, lambda x: x - 1).fit_transform(mapped_dataframe)
 
     def test_fill_nan_methods(self):
         def fill_na_setup(feature, to_na, fill_value=None, method=None):
@@ -137,15 +138,13 @@ class PipelineTests(unittest.TestCase):
         check_for_nan = fill_na_value_df.dataframe[feature].isnull().values.any()
         self.assertFalse(check_for_nan)
 
-        print('FillNa with several methods test succeeded')
-
-    def test_check_different_dtypes_fillna(self):
+    def test_fillna(self):
         feature = 'rating'
-        dataset_2_different_dtypes = Map(feature, {5: 'ciao', 4: np.nan}).fit_transform(self.data)
-        fill_nan_values_df = FillNa(feature, 4).fit_transform(dataset_2_different_dtypes)
-        self.assertEqual(dataset_2_different_dtypes.dataframe.fillna(4), fill_nan_values_df.dataframe)
-        print('Different dtypes with FillNa succeeded')
+        fill_nan_values_df = PreprocessPipeline([Map(feature, {4: np.nan}),
+                                                 FillNa(feature, 4)]).fit_transform(self.data)
+        self.assertEqual(self.data, fill_nan_values_df.dataframe)
 
+    # TODO
     def test_correct_min_max_scaler_output(self):
         self.data['rating'] = [1.0, 2.0, 3.0, 4.0, 5.0]
         minmax_preprocess = PreprocessPipeline([Drop('timestamp'),
@@ -158,90 +157,43 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(expected_output, new_df.dataframe)
         print('MinMaxScaler test succeeded')
 
+    # TODO
     def test_correct_min_max_scaler_output_different_groupings(self):
         self.data['userId'] = [1, 1, 1, 4, 5]
         self.data['rating'] = [1.0, 2.0, 4.0, 4.0, 5.0]
         minmax_preprocess = PreprocessPipeline([Drop('timestamp'),
                                                 MinMaxScaler('userId', 'rating')])
         new_df = minmax_preprocess.fit_transform(self.data)
+
         expected_dict = {'userId': [1, 1, 1, 4, 5],
                          'movieId': [1, 3, 6, 47, 50],
                          'rating': [0.0, 0.33, 1.0, 0.0, 0.0]}
         expected_output = pd.DataFrame(expected_dict)
         self.assertEqual(expected_output, new_df.dataframe)
-        print('MinMaxScaler test succeeded')
 
-    def test_new_column_insertion_series_input(self):
-        columns_before = len(self.data.columns)
-        column = pd.Series([1, 2, 3, 4, 5])
-        update_df = Update(column).fit_transform(self.data)
-        columns_after = len(update_df.dataframe.columns)
-        self.assertEqual(columns_after, columns_before + 1)
-        expected_output = pd.concat([self.data, column], axis=1)
-        self.assertEqual(expected_output, update_df.dataframe)
-        print('Update: insertion of a new column test succeeded')
-
-    def test_update_column_with_pd_series(self):
-        feature = 'rating'
-        column = pd.Series([1, 2, 3, 4, 5], name=feature)
-        update_df = Update(column).fit_transform(self.data)
-        self.data[column.name] = column
-        self.assertEqual(self.data, update_df.dataframe)
-        print('Update: update of an existing column with a pandas Series test succeeded')
-
-    def test_update_multiple_columns_with_pd_df(self):
-        columns_dict = {'rating': [1.0, 2.0, 3.0, 4.0, 5.0],
-                        'userId': [50, 35, 45, 78, 67]}
-        columns_df = pd.DataFrame(columns_dict)
-        update_df = Update(columns_df).fit_transform(self.data)
-        for col in columns_df.columns:
-            self.data[col] = columns_df[col]
-        self.assertEqual(self.data, update_df.dataframe)
-        print('Update: update of multiple existing columns with a dataframe test succeeded')
-
-    def test_update_multiple_columns_with_dict(self):
-        columns_dict = {'rating': [1.0, 2.0, 3.0, 4.0, 5.0],
-                        'userId': [50, 35, 45, 78, 67]}
-        update_df = Update(columns_dict).fit_transform(self.data)
-        for col, val in columns_dict.items():
-            self.data[col] = val
-        self.assertEqual(self.data, update_df.dataframe)
-        print('Update: update of multiple existing columns with a dictionary test succeeded')
+    def test_new_column_insertion(self):
+        new_column_name = 'added'
+        self.data[new_column_name] = 1
+        for update_mode in [{new_column_name: 1}, self.data[new_column_name], self.data]:
+            updated = Update(update_mode).fit_transform(self.data)
+            self.assertEqual(self.data.columns.tolist(), updated.dataframe.columns.tolist())
+            self.assertEqual(self.data, updated.dataframe)
 
     def test_correct_dropna_output(self):
         col_name = 'SomeNaNs'
-        column = pd.Series([1, 2, 3], name=col_name)
-        update_df = Update(column).fit_transform(self.data)
+        update_df = Update({col_name: pd.Series([1, 2, 3])}).fit_transform(self.data)
         drop_nans_df = DropNa(col_name).fit_transform(update_df)
-        check_for_nan = drop_nans_df.dataframe[col_name].isnull().values.any()
-        self.assertFalse(check_for_nan)
-        self.assertEqual(update_df.dataframe.dropna(subset=col_name), drop_nans_df.dataframe)
-        print('DropNa test succeeded')
-
-    def test_check_drop_nan_all_df(self):
-        col_name = 'SomeNaNs'
-        column = pd.Series([1, 2], name=col_name)
-        update_df = Update(column).fit_transform(self.data)
-        drop_nans_df = DropNa().fit_transform(update_df)
-        check_for_nan = drop_nans_df.dataframe.isnull().values.any()
-        self.assertFalse(check_for_nan)
         self.assertEqual(update_df.dataframe.dropna(), drop_nans_df.dataframe)
-        print('DropNa on all dataframe test succeeded')
 
-    # TODO correct BIN test
     def test_bin_correct_output(self):
-        columns_dict = {'rating': [1.0, 2.0, 3.0, 4.0, 5.0]}
-        bin_preprocess = PreprocessPipeline([Update(columns_dict),
-                                             Bin('rating', 5)])
-        new_df = bin_preprocess.fit_transform(self.data)
-        expected_dict = {'userId': [1, 1, 1, 1, 1],
-                         'movieId': [1, 3, 6, 47, 50],
-                         'rating': [1, 2, 3, 4, 5],
-                         'timestamp': [964982703, 964981247, 964982224, 964983815, 964982931]}
-        expected_output = pd.DataFrame(expected_dict)
-        self.assertEqual(expected_output, new_df.dataframe)
+        bins = 5
+        baseline = 1
+        new_df = Bin('rating', bins, baseline=1).fit_transform(self.data)
+        self.data.rating = binned_statistic(self.data.rating, self.data.rating, bins=bins).binnumber + baseline
+        self.assertEqual(self.data, new_df.dataframe)
         print('Bin test succeeded')
 
+    # TODO
     def test_bin_threshold_correct_output(self):
         bin_threshold_preprocess = PreprocessPipeline([Drop('title'),
                                                        BinThreshold('genres', 'other', 7, divider='|')])
@@ -256,6 +208,7 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(expected_output, new_df)
         print('BinThreshold test succeeded')
 
+    # TODO
     def test_bin_cumulative_correct_output(self):
         bin_cumulative_preprocess = PreprocessPipeline([Drop('title'),
                                                         BinCumulative('genres', 'other', 50, divider='|')])
@@ -278,55 +231,28 @@ class PipelineTests(unittest.TestCase):
         print(new_df)
 
     def test_one_hot_encoding_multiple_feature(self):
-        one_hot_encoding_preprocess = PreprocessPipeline([OneHotEncode('genres', divider='|')])
+        feature = 'genres'
+        one_hot_encoding_preprocess = PreprocessPipeline([OneHotEncode(feature, divider='|')])
         cut_feature_df = self.features.head()
         new_df = one_hot_encoding_preprocess.fit_transform(cut_feature_df)
-        expected_output = pd.concat(
-            [cut_feature_df.drop('genres', axis=1), cut_feature_df['genres'].str.get_dummies('|')],
-            axis=1)
+        expected_output = pd.concat([cut_feature_df.drop(feature, axis=1),
+                                     cut_feature_df[feature].str.get_dummies('|')],
+                                    axis=1)
         self.assertEqual(new_df.dataframe, expected_output)
         print(new_df)
 
-    # TODO check condense set
-    def test_condense_correct_output(self):
+    def test_condense(self):
         separator = '|'
-        condense_preprocess = PreprocessPipeline([Select(['movieId', 'tag']),
-                                                  Condense('movieId', separator)])
-        new_df = condense_preprocess.fit_transform(self.tags)
-        new_df = new_df.dataframe.head()
-        expected_dict = {'movieId': [1, 2, 3, 5, 7],
-                         'tag': ['pixar|fun', 'fantasy|magic board game|Robin Williams|game',
-                                 'moldy|old', 'pregnancy|remake', 'remake']}
-        expected_output = pd.DataFrame(expected_dict)
-        self.assertEqual(expected_output, new_df)
-        print('Condense test succeeded')
+        feature = 'tag'
+        id_col = 'movieId'
+        self.tags['nans'] = np.nan
+        self.tags['float_numbers'] = np.random.random(len(self.tags))
+        self.tags = self.tags[[id_col, feature]]
+        condensed_df = Condense(id_col, separator).fit_transform(self.tags)
+        self.tags = self.tags.groupby(id_col).agg(lambda x: separator.join(x.astype(str).unique())).reset_index()
+        self.assertEqual(condensed_df.dataframe, self.tags)
 
-    def test_condense_with_numbers(self):
-        test_dataset_dict = {'Id': [1, 1, 2, 1, 4, 5, 4, 2, 5, 4],
-                             'tags': [1, 'cart', 2, 'hola', 'ciao', 'uber',
-                                      'cab', 3.0, 'NaN', 'Rob']}
-        test_dataset = pd.DataFrame(test_dataset_dict)
-        condense_df = Condense('Id', '|').fit_transform(test_dataset)
-        expected_dict = {'Id': [1, 2, 4, 5],
-                         'tags': ['1|cart|hola', '2|3.0',
-                                  'ciao|cab|Rob', 'uber|NaN']}
-        expected_output = pd.DataFrame(expected_dict)
-        self.assertEqual(expected_output, condense_df.dataframe)
-        print('Condense with float and integers test succeeded')
-
-    def test_condense_with_nan(self):
-        test_dataset_dict = {'Id': [1, 1, 2, 1, 4, 5, 4, 2, 5, 4],
-                             'tags': [1, np.nan, 2, 'hola', 'ciao', 'uber',
-                                      'cab', 3.0, 'NaN', np.nan]}
-        test_dataset = pd.DataFrame(test_dataset_dict)
-        condense_df = Condense('Id', '|').fit_transform(test_dataset)
-        expected_dict = {'Id': [1, 2, 4, 5],
-                         'tags': ['1|nan|hola', '2|3.0',
-                                  'ciao|cab|nan', 'uber|NaN']}
-        expected_output = pd.DataFrame(expected_dict)
-        self.assertEqual(expected_output, condense_df.dataframe)
-        print('Condense with NaNs test succeeded')
-
+    # TODO
     def test_drop_duplicates(self):
         test_dataset = pd.DataFrame({
             'brand': ['Yum Yum', 'Yum Yum', 'Indomie', 'Indomie', 'Indomie'],
