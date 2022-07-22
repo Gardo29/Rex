@@ -10,5 +10,6 @@ setup(
     license='',
     author='Lorenzo',
     author_email='l.gardo98@gmail.com',
-    description=''
+    description='',
+    install_requires=['lightfm', 'scikit-surprise==1.1.1', 'fastapi', 'uvicorn']
 )
