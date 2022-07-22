@@ -30,7 +30,7 @@ app = FastAPI()
 
 def _read_config(file_name, section_name) -> dict:
     configs = ConfigParser()
-    configs.read(Path(__file__).parent.parent.parent / file_name)
+    configs.read(Path(__file__).parent / file_name)
     return dict(configs.items(section_name))
 
 

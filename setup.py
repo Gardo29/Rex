@@ -11,5 +11,14 @@ setup(
     author='Lorenzo',
     author_email='l.gardo98@gmail.com',
     description='',
-    install_requires=['lightfm', 'scikit-surprise==1.1.1', 'fastapi', 'uvicorn']
+    install_requires=['numpy',
+                      'pandas',
+                      'requests',
+                      'fastapi',
+                      'lightfm',
+                      'scikit-learn',
+                      'matplotlib',
+                      'seaborn',
+                      'scipy',
+                      'setuptools']
 )
