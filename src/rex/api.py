@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import os
 from configparser import ConfigParser
 from typing import List, Optional, Callable
 
+import os
 import numpy as np
 import pandas as pd
 from fastapi import FastAPI, HTTPException, Request, requests
@@ -16,8 +16,8 @@ from rex.model import Rex, RexBaseModel
 from rex.preprocessing import Bin, PreprocessPipeline, PreprocessedDataFrame, Drop, PreprocessFunction
 from rex.tools import get_df
 
-CLIENT_CONFIGS = '../../resources/client_config.ini'
-SERVER_CONFIGS = '../resources/server_config.ini'
+CLIENT_CONFIGS = 'client_config.ini'
+SERVER_CONFIGS = 'server_config.ini'
 OK_MESSAGE = {'message': 'ok'}
 UNPROCESSABLE_ENTITY = 422
 app = FastAPI()
@@ -25,13 +25,14 @@ app = FastAPI()
 
 def _load_server_config():
     configs = ConfigParser()
-    configs.read(SERVER_CONFIGS)
+    configs.read(os.path.dirname(os.path.abspath(__file__)) + SERVER_CONFIGS)
     return dict(configs.items('server_configurations'))
 
 
 def _load_client_config():
     configs = ConfigParser()
-    configs.read(CLIENT_CONFIGS)
+    print(os.path.dirname(os.path.abspath(__file__)) + CLIENT_CONFIGS)
+    configs.read(os.path.dirname(os.path.abspath(__file__)) + CLIENT_CONFIGS)
     return dict(configs.items('client_configurations'))
 
 

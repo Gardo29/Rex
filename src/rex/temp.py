@@ -26,8 +26,10 @@ movielens_movie_features['real'] = np.random.random(len(movielens_movie_features
 print(remote_preprocess("../resources" + MOVIE_LENS_RATINGS, "preprocess_dataframe3.csv",
                         [Bin('rating', 5), Drop('timestamp')]))
 
+"""
 print(remote_fit('d.csv', 'lfmmodel', {'algo': 'LightFM'}))
 print(remote_predict('lfmmodel', 'predictions.csv', np.unique(movielens.userId)[:20], movielens.movieId[:5]))
 
 print(remote_fit_predict("ratings.csv", "model_fit_predict", "predictions",
                          np.unique(movielens.userId)[:20], movielens.movieId[:5], model_parameters={'algo': 'LightFM'}))
+"""
