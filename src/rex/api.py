@@ -15,25 +15,31 @@ from rex.dump import decode_model, encode_model, dump_model, load_model
 from rex.model import Rex, RexBaseModel
 from rex.preprocessing import Bin, PreprocessPipeline, PreprocessedDataFrame, Drop, PreprocessFunction
 from rex.tools import get_df
+from pathlib import Path
 
-CLIENT_CONFIGS = 'client_config.ini'
-SERVER_CONFIGS = 'server_config.ini'
+CLIENT_CONFIGS_FILE = 'client_config.ini'
+SERVER_CONFIGS_FILE = 'server_config.ini'
+
+CLIENT_SECTION_NAME = 'client_configurations'
+SERVER_SECTION_NAME = 'server_configurations'
+
 OK_MESSAGE = {'message': 'ok'}
 UNPROCESSABLE_ENTITY = 422
 app = FastAPI()
 
 
-def _load_server_config():
+def _read_config(file_name, section_name) -> dict:
     configs = ConfigParser()
-    configs.read(os.path.dirname(os.path.abspath(__file__)) + SERVER_CONFIGS)
-    return dict(configs.items('server_configurations'))
+    configs.read(Path(__file__).parent.parent.parent / file_name)
+    return dict(configs.items(section_name))
+
+
+def _load_server_config():
+    return _read_config(SERVER_CONFIGS_FILE, SERVER_SECTION_NAME)
 
 
 def _load_client_config():
-    configs = ConfigParser()
-    print(os.path.dirname(os.path.abspath(__file__)) + CLIENT_CONFIGS)
-    configs.read(os.path.dirname(os.path.abspath(__file__)) + CLIENT_CONFIGS)
-    return dict(configs.items('client_configurations'))
+    return _read_config(CLIENT_CONFIGS_FILE, CLIENT_SECTION_NAME)
 
 
 def _raise_bad_formatted_data(message: str):
