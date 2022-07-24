@@ -13,6 +13,7 @@ setup(
     author_email='l.gardo98@gmail.com',
     description='',
     install_requires=['numpy',
+                      'surprise'
                       'pandas',
                       'requests',
                       'fastapi',
