@@ -7,6 +7,7 @@ setup(
               'test.model_selection_tests'],
     package_dir={'': 'src'},
     package_data={'src': ['/*.ini']},
+    include_package_data=True,
     url='',
     license='',
     author='Lorenzo',
